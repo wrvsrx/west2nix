@@ -13,8 +13,10 @@
       inherit (nixpkgs) lib;
       forAllSystems = lib.genAttrs lib.systems.flakeExposed;
     in
-    {
+    rec {
       lib.mkWest2nix = { pkgs }: pkgs.callPackage ./. { };
+
+      overlays.default = final: prev: lib.mkWest2nix { pkgs = prev; };
 
       packages =
         forAllSystems
