@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    zephyr-nix.url = "github:adisbladis/zephyr-nix";
+    zephyr-nix.url = "github:wrvsrx/zephyr-nix";
     zephyr-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
 
