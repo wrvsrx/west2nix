@@ -10,7 +10,7 @@
   manifest,
 }:
 let
-  manifest' = if builtins.isPath manifest then (lib.importTOML manifest) else manifest;
+  manifest' = if builtins.isPath manifest || builtins.hasContext manifest then (lib.importTOML manifest) else manifest;
   westDeps = stdenvNoCC.mkDerivation {
     name = "west-dependencies";
     unpackPhase = "true";
