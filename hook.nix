@@ -10,75 +10,70 @@
   manifest,
 }:
 let
-  manifest' = if builtins.isPath manifest || builtins.hasContext manifest then (lib.importTOML manifest) else manifest;
-  westDeps = stdenvNoCC.mkDerivation {
-    name = "west-dependencies";
-    unpackPhase = "true";
-    nativeBuildInputs = [
-      python3.pkgs.west
-      gitMinimal
-    ];
-    dontFixup = true;
-    buildPhase =
-      let
-        copyProjects = lib.concatStringsSep "\n" (
-          map (
-            project:
-            let
-              path = project.path or project.name;
-              src = fetchgit {
-                inherit (project) url;
-                inherit (project.nix) hash;
-                fetchSubmodules = project.submodules or false;
-                rev = project.revision;
-              };
-            in
-            ''
-              __west2nix_copyProject ${src} ${path}
-            ''
-          ) manifest'.manifest.projects
-        );
-      in
-      ''
-        # West only considers proper git repos when discovering projects.
-        # Hack around this by:
-        # - Copying the project into place
-        # - Instantiate a git repo
-        function __west2nix_setupFakeGit {
-            echo Creating fake dummy git repo in "$1"
+  manifest' =
+    if builtins.isPath manifest || builtins.hasContext manifest then
+      (lib.importTOML manifest)
+    else
+      manifest;
+  srcToFakeGit =
+    { name, src }:
+    stdenvNoCC.mkDerivation {
+      name = "${name}-fakegit";
+      inherit src;
+      dontFixup = true;
+      nativeBuildInputs = [ gitMinimal ];
+      buildPhase = ''
+        echo Creating fake dummy git repo
 
-            git -C "$1" init
-            git -C "$1" config user.email 'foo@example.com'
-            git -C "$1" config user.name 'Foo Bar'
-            git -C "$1" add -A
-            git -C "$1" commit -m 'Fake commit'
-            git -C "$1" checkout -b manifest-rev
-            git -C "$1" checkout --detach manifest-rev
-        }
-        function __west2nix_copyProject {
-            mkdir -p $(dirname "$2")
-            cp -r "$1" "$2"
-            chmod +w "$2"
-            __west2nix_setupFakeGit "$2"
-        }
-        ${copyProjects}
+        git init
+        git config user.email 'foo@example.com'
+        git config user.name 'Foo Bar'
+        git add -A
+        git commit -m 'Fake commit'
+        git checkout -b manifest-rev
+        git checkout --detach manifest-rev
       '';
-    installPhase = ''
-      rm env-vars
-      mkdir -p $out
-      cp -r {.,}* $out
-    '';
-  };
+      installPhase = ''
+        mkdir -p $out
+        cp -r .git $out
+      '';
+    };
+  projectsWithFakeGit = map (
+    project:
+    let
+      path = project.path or project.name;
+      src = fetchgit {
+        inherit (project) url;
+        inherit (project.nix) hash;
+        fetchSubmodules = project.submodules or false;
+        rev = project.revision;
+      };
+      fakegit = srcToFakeGit {
+        inherit (project) name;
+        inherit src;
+      };
+    in
+    {
+      inherit (project) name;
+      inherit path src fakegit;
+    }
+  ) manifest'.manifest.projects;
+  copyProjectsWithFakeGit = lib.concatStringsSep "\n" (
+    map (project: ''
+      echo Copying project ${project.name} with fake git repo
+      __west2nix_copyProjectWithFakeGit ${project.src} ${project.fakegit} ${project.path}
+    '') projectsWithFakeGit
+  );
 in
 makeSetupHook {
   name = "west2nix-project-hook.sh";
   substitutions = {
     # Project path for `west init -l ...`
     path = manifest'.manifest.self.path or ".";
-    inherit westDeps;
+    inherit copyProjectsWithFakeGit;
   };
   passthru = {
     manifest = manifest';
-    inherit westDeps;
+    inherit projectsWithFakeGit;
   };
 } ./project-hook.sh
