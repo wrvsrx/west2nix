@@ -1,7 +1,16 @@
+# West only considers proper git repos when discovering projects.
+# Hack around this by creating fake git repos for each project:
+function __west2nix_copyProjectWithFakeGit {
+    mkdir -p $(dirname "$3")
+    cp -r "$1" "$3"
+    chmod +w "$3"
+    cp -r "$2"/.git "$3"/.git
+}
+
 function __west2nix_copyProjectsHook {
     echo "Executing __west2nix_copyProjectsHook"
 
-    cp -r --no-preserve=mode @westDeps@/* .
+    @copyProjectsWithFakeGit@
 }
 
 
