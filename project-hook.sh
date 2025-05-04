@@ -3,7 +3,7 @@
 function __west2nix_copyProjectWithFakeGit {
     mkdir -p $(dirname "$3")
     cp -r "$1" "$3"
-    chmod +w "$3"
+    chmod -R +w "$3"
     cp -r "$2"/.git "$3"/.git
 }
 
